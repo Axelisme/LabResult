@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>網站檔案目錄</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            margin: 10px 0;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        li:hover {
+            background-color: #f0f0f0;
+        }
+
+        a {
+            color: #0366d6;
+            text-decoration: none;
+            display: block;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+
+        .file-icon {
+            margin-right: 10px;
+        }
+
+        .error {
+            color: #d73a49;
+            font-weight: bold;
+        }
+
+        .breadcrumb {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .breadcrumb a {
+            display: inline;
+            margin: 0 5px;
+        }
+
+        .back-link {
+            margin-bottom: 15px;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>網站檔案目錄</h1>
+
+    <div id="breadcrumb" class="breadcrumb"></div>
+
+    <div id="file-list">
+        <p class="loading">載入中，請稍候...</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const fileList = document.getElementById('file-list');
+            const breadcrumbDiv = document.getElementById('breadcrumb');
+
+            // 配置信息 - GitHub 用戶名和倉庫名
+            const username = 'Axelisme';
+            const repo = 'LabResult';
+
+            // 獲取當前路徑參數
+            const urlParams = new URLSearchParams(window.location.search);
+            let currentPath = urlParams.get('path') || '';
+
+            // 顯示麵包屑導航
+            function updateBreadcrumb() {
+                breadcrumbDiv.innerHTML = '<strong>路徑：</strong>';
+                const pathParts = currentPath.split('/').filter(part => part !== '');
+
+                // 添加根目錄連結
+                const rootLink = document.createElement('a');
+                rootLink.href = 'index.html';
+                rootLink.textContent = '根目錄';
+                breadcrumbDiv.appendChild(rootLink);
+
+                // 構建路徑
+                let partialPath = '';
+                pathParts.forEach((part, index) => {
+                    breadcrumbDiv.appendChild(document.createTextNode(' > '));
+
+                    partialPath += (index === 0 ? '' : '/') + part;
+                    const link = document.createElement('a');
+                    if (index === pathParts.length - 1) {
+                        // 當前目錄不需要連結
+                        const span = document.createElement('span');
+                        span.textContent = part;
+                        breadcrumbDiv.appendChild(span);
+                    } else {
+                        link.href = `index.html?path=${encodeURIComponent(partialPath)}`;
+                        link.textContent = part;
+                        breadcrumbDiv.appendChild(link);
+                    }
+                });
+            }
+
+            // 顯示回到上層目錄的連結
+            function addBackLink() {
+                if (currentPath) {
+                    const pathParts = currentPath.split('/').filter(part => part !== '');
+                    if (pathParts.length > 0) {
+                        const backDiv = document.createElement('div');
+                        const backLink = document.createElement('a');
+                        backLink.classList.add('back-link');
+
+                        // 回到上一層目錄
+                        const parentPath = pathParts.slice(0, -1).join('/');
+                        backLink.href = parentPath ? `index.html?path=${encodeURIComponent(parentPath)}` : 'index.html';
+                        backLink.textContent = '📂 ../ (回到上層目錄)';
+
+                        backDiv.appendChild(backLink);
+                        return backDiv;
+                    }
+                }
+                return null;
+            }
+
+            // 檢查檔案是否為網頁檔案
+            function isWebPage(filename) {
+                const webExtensions = ['.html', '.htm', '.xhtml', '.php', '.asp', '.aspx', '.jsp'];
+                const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+                return webExtensions.includes(extension);
+            }
+
+            // 獲取指定路徑的倉庫內容
+            function fetchDirectoryContents() {
+                let apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/`;
+                if (currentPath) {
+                    apiUrl += currentPath;
+                }
+
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('無法獲取檔案列表。請確認倉庫設置是否正確。');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 清除載入信息
+                        fileList.innerHTML = '';
+
+                        // 更新麵包屑導航
+                        updateBreadcrumb();
+
+                        // 創建檔案列表
+                        const ul = document.createElement('ul');
+
+                        // 添加回上層目錄連結
+                        const backLink = addBackLink();
+                        if (backLink) {
+                            fileList.appendChild(backLink);
+                        }
+
+                        // 過濾掉隱藏檔和當前的index.html
+                        data.filter(item => !item.name.startsWith('.') && item.name !== 'index.html')
+                            .sort((a, b) => {
+                                // 文件夾優先顯示
+                                if (a.type === 'dir' && b.type !== 'dir') return -1;
+                                if (a.type !== 'dir' && b.type === 'dir') return 1;
+                                // 字母順序排序
+                                return a.name.localeCompare(b.name);
+                            })
+                            .forEach(item => {
+                                const li = document.createElement('li');
+                                const a = document.createElement('a');
+
+                                // 設置圖標
+                                const icon = document.createElement('span');
+                                icon.classList.add('file-icon');
+                                icon.textContent = item.type === 'dir' ? '📁' : '📄';
+
+                                // 為目錄和檔案設置特殊處理
+                                if (item.type === 'dir') {
+                                    // 構建新的路徑參數
+                                    const newPath = currentPath
+                                        ? currentPath + '/' + item.name
+                                        : item.name;
+                                    a.href = `index.html?path=${encodeURIComponent(newPath)}`;
+                                } else {
+                                    // 檢查是否為網頁檔案
+                                    if (isWebPage(item.name)) {
+                                        // 網頁檔案直接在當前頁面開啟
+                                        const pagePath = currentPath
+                                            ? currentPath + '/' + item.name
+                                            : item.name;
+                                        // 使用GitHub Pages的URL格式
+                                        a.href = `https://${username}.github.io/${repo}/${pagePath}`;
+                                        // 給網頁檔案一個特殊的圖標
+                                        icon.textContent = '🌐';
+                                    } else {
+                                        // 其他文件保持原有的處理方式
+                                        a.href = item.html_url;
+                                        a.target = "_blank"; // 在新窗口打開文件
+                                    }
+                                }
+
+                                a.textContent = item.name;
+                                a.prepend(icon);
+
+                                li.appendChild(a);
+                                ul.appendChild(li);
+                            });
+
+                        fileList.appendChild(ul);
+                    })
+                    .catch(error => {
+                        fileList.innerHTML = `<p class="error">錯誤：${error.message}</p>
+                        <p>請確認倉庫設置是否正確。</p>`;
+                        console.error('獲取檔案列表失敗:', error);
+                    });
+            }
+
+            // 初始載入
+            fetchDirectoryContents();
+        });
+    </script>
+</body>
+
+</html>
